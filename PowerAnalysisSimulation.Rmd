@@ -4,7 +4,7 @@ author: "Antonia Krefeld-Schwalb"
 date: "26 juin 2019"
 output: html_document
 ---
-
+  
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
@@ -12,23 +12,18 @@ knitr::opts_chunk$set(echo = TRUE)
 
 #Input values:
 True Effect sizes : | Hypothesized Effect Size :
+  --- | --- | ---
+  True Effect sizes : |  unbiased | biased
 --- | --- | ---
-True Effect sizes : |  unbiased | biased
---- | --- | ---
- $\hat\delta= .2$| $\delta = .2$|$\delta  = .5$
-
-
-*based on the review of published AND unpublished studies as well as theoretical considerations
+  $\hat\delta= .2$| $\delta = .2$|$\delta  = .5$
+  
+  
+  *based on the review of published AND unpublished studies as well as theoretical considerations
 **publication bias
-
-
 ```{r }
-
-d_true <- c(.2, .5, 1, 10)
-
-d_hyp <- c(.2, .5, NA)
+d_true <- c(0, .2, .5, .8)
+d_hyp <- c(.2, .5, .8, NA)
 ```
-
 
 #Sample Size
 
@@ -36,116 +31,219 @@ Set error rates as coventional to $\alpha = .05$ and $\beta = .20$ and calculate
 
 
 #Simulate t-value
-
 ```{r }
-
 alpha = .05
 beta = .20
 pow = 1-beta
 Nsamples = 1000
-
 N = rep(NA, length(d_hyp)) # Sample size needed to achieve power
 p = Tval = TvalLow = d_emp = d_empLow = L0x = LR= Lhypx =Lhyp = L1x = array(NA, dim = c(length(d_hyp), Nsamples, 2, length(d_true))) 
 
-for (k in 1:length(d_true)){
+df1 =df2 =matrix(0,nrow = 1, ncol=5)
+
+```
+
+Simulate `r Nsamples` t-test, twice. The first t-test represents the scientific study and the second t-test can be regarded as the pratical implementation.
+
+```{r }
 
   for (dd in 1:length(d_hyp)){
-    
-      # N[dd] = round(((qnorm(1-alpha)+qnorm(pow))/d_hyp[dd]*sqrt(2))^2 ) }
-  
-      for (ss in 1:Nsamples){ # for variation
-        
-        # if d_hyp IS NOT NA => estimate sample size based on alpha, beta to find effect (to reject H0: effect is not       significant) => min sample size needed to reject H0 at 0.05
-        
+    for (k in 1:length(d_true)){
+  # repeat the Simulation Nsamples times
+    for (ss in 1: Nsamples){
+      # IF existing point Hypothesis, estimate minimum sample size for errorates alpha and beta
       if (!is.na(d_hyp[dd])){
-        # N[dd] = round(((qnorm(1-alpha)+qnorm(pow))/(d_hyp[dd])*(sqrt(2)))^2) }
-        N[dd] = round(2*(qnorm(1-alpha/2)+qnorm(pow))^2/d_hyp[dd]^2)
-        }
-  
-      # if d_hyp IS NA => if no d_hyp => take random sample size (no hyp in marketing research) to simulate usual way of       consumer researcher
+          N[dd] = round(2*(qnorm(1-alpha/2)+qnorm(pow))^2/d_hyp[dd]^2) }
+      # IF not existing point Hypothesis, draw random sample size from sequence 10 - 100
       if (is.na(d_hyp[dd])){
-        N[dd] = sample(seq(10,100),1)
-        }
-      #mean(p[1,,1]<.05)
-  
-      for (times in 1:2){
-        x1 = rnorm(N[dd], d_true[k], 1) # expectation = d_true, sd = 1, N samples
-        meanx1 = mean(x1)
-  
-        #Distribution of Control condition  
-        x0 = rnorm(N[dd], 0, 1) # expectation = 0, sd = 1, N samples
-        meanx0 = mean(x0)
+          N[dd] = sample(seq(10,100),1)}
+
       
-        #calculate Standard Error as in R t.test function
-        v = ((N[dd]-1)*var(x1)+(N[dd]-1)*var(x0))/(2*N[dd]-2) #not SE but avg deviation between 2 groups (pooled var)
+# repeat the simulation twice: 1.lab 2. pratical implementation
+for (times in 1:2){
+  # simulate distribution oftreatment group
+  x1 =rnorm(N[dd],d_true[k], 1)
+  meanx1 = mean(x1)
+  # simulate distribution oftreatment group
+  x0 =rnorm(N[dd],0, 1)
+  meanx0 = mean(x0)
       
-        SE =  sqrt(v*(1/N[dd]+1/N[dd]))
-        lowdiff = mean(x1 - x0) - 1.96*SE #different way of estimating effect size: more conservative (lower bound of 95% CI) => IGNORE
-  
+
         #Calculate t-values
         Tval[dd,ss,times, k] = (meanx1-meanx0)/(sqrt((var(x1) + var(x0))/2)*sqrt(2/N[dd]))
         p[dd,ss,times, k] = 2*pt(-Tval[dd,ss,times, k], (2*N[dd]-2)) # p-value
         d_emp[dd,ss,times, k] = 2*Tval[dd,ss,times, k]/sqrt(N[dd]) #d-emp
-      
-        TvalLow[dd,ss,times, k] = (lowdiff)/(sqrt((var(x1) + var(x0))/2)* sqrt(2/N[dd])) # lower bounds (effect based on lower bound) => IGNORE
-        d_empLow[dd,ss,times, k] = 2*TvalLow[dd,ss,times, k]/sqrt(N[dd]) # lower bounds => IGNORE
-  
-        L0x[dd,ss,times, k] = dt(Tval[dd,ss,times, k], (2*N[dd]-2), 0) # likelihood of 0 given data, density at observed t-value given df and non centrality param (0)
-      
-        if(!is.na(d_hyp[dd])){
-          
-          ncp = d_hyp[dd]*sqrt(N[dd])/sqrt(2) #non-centrality param (of t distribution)
-          L1x[dd,ss,times, k] = dt(Tval[dd,ss,times, k], (2*N[dd]-2), ncp) #likelihood of obs t-value given hypothesied effect           size for transformed distr given ncp
-          Lhypx[dd,ss,times, k] = dt(ncp, (2*N[dd]-2), ncp) #density at median of same distribution (.39)
-          LR[dd,ss,times, k] = L1x[dd,ss,times, k]/L0x[dd,ss,times, k] # likelihood ratio (obs t-value and null hyp) (LRT>4 => obs effect size is not from the H0 distr)
-          Lhyp[dd,ss,times, k] = Lhypx[dd,ss,times, k]/L1x[dd,ss,times, k] #likelihood ration of the median of hypothesied distr to obs effect size => how far obs effect size from the H0 effect size
-        }
+        if(times == 1) df1 = rbind(df1,c(d_emp[dd,ss,times, k],  p[dd,ss,times, k], d_hyp[dd],d_true[k],times))
+        if(times == 2) df2 = rbind(df2,c(d_emp[dd,ss,times, k],  p[dd,ss,times, k], d_hyp[dd],d_true[k],times))
+        
+###### the following lines of code are only relevant later for LR test and test on the lower borderof the interval
+#   
+#   #calculate Standard Error as in R t.test function
+        # TvalLow[dd,ss,times, k] = (lowdiff)/(sqrt((var(x1) + var(x0))/2)* sqrt(2/N[dd])) # lower bounds (effect based on lower bound) => IGNORE
+        # d_empLow[dd,ss,times, k] = 2*TvalLow[dd,ss,times, k]/sqrt(N[dd]) # lower bounds => IGNORE
+        # 
+        # L0x[dd,ss,times, k] = dt(Tval[dd,ss,times, k], (2*N[dd]-2), 0) # likelihood of 0 given data, density at observed t-value given df and non centrality param (0)
+        # 
+        # if(!is.na(d_hyp[dd])){
+        # 
+        #   ncp = d_hyp[dd]*sqrt(N[dd])/sqrt(2) #non-centrality param (of t distribution)
+        #   L1x[dd,ss,times, k] = dt(Tval[dd,ss,times, k], (2*N[dd]-2), ncp) #likelihood of obs t-value given hypothesied effect           size for transformed distr given ncp
+        #   Lhypx[dd,ss,times, k] = dt(ncp, (2*N[dd]-2), ncp) #density at median of same distribution (.39)
+        #   LR[dd,ss,times, k] = L1x[dd,ss,times, k]/L0x[dd,ss,times, k] # likelihood ratio (obs t-value and null hyp) (LRT>4 => obs effect size is not from the H0 distr)
+        #   Lhyp[dd,ss,times, k] = Lhypx[dd,ss,times, k]/L1x[dd,ss,times, k] #likelihood ration of the median of hypothesied distr to obs effect size => how far obs effect size from the H0 effect size
+        # }
       }
     }
   }
 }
 ``` 
 
-Average ratio of effect sizes if $\it{p_1} < .05 :\frac{d_{emp_2}}{d_{emp_1}}$:
 
-$d_{hyp} =$ `r d_hyp[1]` \& $d_{true} =$ `r d_true` 
+The plot illustrates the observed effect sizes in the two test, if the first test was significant. The column indicates the true effect size and the row indicates the hypothesized effect size, which was used to determine the sample size of the test, to achieve $\beta = .8$ with $\alpha = .05$. The color indicates the ratio of the two effect sizes and the diagonal goes through zero and one. 
 
-`r mean(d_emp[1,which(p[1,,1] <.05),2]/d_emp[1,which(p[1,,1] <.05),1])`
-
-
-$d_{hyp} =$ `r d_hyp[2]` \& $d_{true} =$ `r d_true` 
-
-`r mean(d_emp[2,which(p[2,,1] <.05),2]/d_emp[2,which(p[2,,1] <.05),1])`
+```{r }
+library(ggplot2)
+library(knitr)
 
 
-$d_{hyp} =$ `r d_hyp[3]` \& $d_{true} =$ `r d_true` 
+df1 = df1[-1,]
+df2 = df2[-1,]
 
-`r mean(d_emp[3,which(p[3,,1] <.05),2]/d_emp[3,which(p[3,,1] <.05),1])`
+df= cbind(df1[which(df1[,2] < .05), c(1,3,4)],df2[which(df1[,2] < .05), 1])
 
 
 
-Average ratio of effect sizes if $LR > \frac{\beta}{\alpha} =$ 'r beta/alpha' : $\frac{d_{emp_2}}{d_{emp_1}}$:
+colnames(df)= c("d_1","d_hyp","d_true","d_2")
+df= as.data.frame(df)
 
-$d_{hyp} =$ `r d_hyp[1]` \& $d_{true} =$ `r d_true` 
+df$ratio = df$d_1/df$d_2
+df$ratio[df$d_1 ==0] = df$df_2/.0001
+df$ratioFactor[df$ratio < .5]=1
+df$ratioFactor[df$ratio >= .5]=2
+df$ratioFactor[df$ratio >= 1] =3
+df$ratioFactor[df$ratio >= 1.5]=4
 
-`r mean(d_emp[1,which(LR[1,,1] >20),2]/d_emp[1,which(LR[1,,1] >20),1])`
+summaries = matrix(NA, nrow= length(d_true)*length(d_hyp), ncol = 4)
+
+for(k in 1:length(d_true)){
+  for (dd in 1:length(d_hyp)){
+    print(length(d_hyp)*(k-1)+dd)
+    summaries[(length(d_hyp)*(k-1) + dd) ,] = c(round(mean(d_emp[dd,which(p[dd,,1,k] <.05),2,k]/d_emp[dd,which(p[dd,,1,k] <.05),1,k]),2),
+                                                round(sd(d_emp[dd,which(p[dd,,1,k] <.05),2,k]/d_emp[dd,which(p[dd,,1,k] <.05),1,k]),2), d_hyp[dd],d_true[k])
+    
+  }}
+summaries = as.data.frame(summaries)
+colnames(summaries)= c(expression(M(d_[emp_2]/d_[emp_1])),expression(SD(d_[emp_2]/d_[emp_1])),"d_hyp","d_true")
 
 
-$d_{hyp} =$ `r d_hyp[2]` \& $d_{true} =$ `r d_true` 
+ggplot(df, aes(x=d_1, y=d_2, color = factor(ratioFactor)))+
+  geom_point()+
+  facet_grid(d_hyp~d_true)+
+  xlab(bquote(d_[obs1]))+
+  ylab(bquote(d_[obs2]))+
+  geom_abline(intercept = 0, slope = 1)+
+  scale_color_discrete(name = "", labels = c(bquote(d_[emp_2]/d_[emp_1]<.5),
+                                                                       bquote(d_[emp_2]/d_[emp_1]<1),
+                                                                       bquote(d_[emp_2]/d_[emp_1]<1.5),
+ 
+                                                                                                                   bquote(d_[emp_2]/d_[emp_1]>=1.5)))
+```
 
-`r mean(d_emp[2,which(LR[1,,1] >20),2]/d_emp[2,which(LR[1,,1] >20),1])`
+
+Average ratio of effect sizes in study 1 and study 2 $\it{p_1} < .05$:
 
 
+```{r }
+
+kable(summaries,col.names = c("M(ratio)",
+                              "SD(ratio)",
+                              "d_hyp","d_true"))
 
 
-Average ratio of effect sizes if $LR > \frac{\beta}{\alpha} =$ 'r beta/alpha' : $\frac{d_{emp_2}}{d_{emp_1}}$:
+# 
+# $d_{hyp} =$ `r d_hyp[1]` \& $d_{true} =$ `r d_true[1]` 
+# 
+# $M(\frac{d_{emp_2}}{d_{emp_1}})$= `r round(mean(d_emp[1,which(p[1,,1,1] <.05),2,1]/d_emp[1,which(p[1,,1,1] <.05),1,1]),2)`, $SD(\frac{d_{emp_2}}{d_{emp_1}})$= `r round(sd(d_emp[1,which(p[1,,1,1] <.05),2,1]/d_emp[1,which(p[1,,1,1] <.05),1,1]),2)`
+# 
+# $d_{hyp} =$ `r d_hyp[2]` \& $d_{true} =$ `r d_true[1]` 
+# 
+# $M(\frac{d_{emp_2}}{d_{emp_1}})$= `r round(mean(d_emp[2,which(p[2,,1,1] <.05),2,1]/d_emp[2,which(p[2,,1,1] <.05),1,1]),2)`, $SD(\frac{d_{emp_2}}{d_{emp_1}})$= `r round(sd(d_emp[2,which(p[2,,1,1] <.05),2,1]/d_emp[2,which(p[2,,1,1] <.05),1,1]),2)`
+# 
+# 
+# $d_{hyp} =$ `r d_hyp[3]` \& $d_{true} =$ `r d_true[1]` 
+# 
+# $M(\frac{d_{emp_2}}{d_{emp_1}})$= `r round(mean(d_emp[3,which(p[3,,1,1] <.05),2,1]/d_emp[3,which(p[3,,1,1] <.05),1,1]),2)`, $SD(\frac{d_{emp_2}}{d_{emp_1}})$= `r round(sd(d_emp[3,which(p[3,,1,1] <.05),2,1]/d_emp[3,which(p[3,,1,1] <.05),1,1]),2)`
+# 
+# $d_{hyp} =$ `r d_hyp[4]` \& $d_{true} =$ `r d_true[1]` 
+# 
+# $M(\frac{d_{emp_2}}{d_{emp_1}})$= `r round(mean(d_emp[4,which(p[4,,1,1] <.05),2,1]/d_emp[4,which(p[4,,1,1] <.05),1,1]),2)`, $SD(\frac{d_{emp_2}}{d_{emp_1}})$= `r round(sd(d_emp[4,which(p[4,,1,1] <.05),2,1]/d_emp[4,which(p[4,,1,1] <.05),1,1]),2)`
+# 
+# 
+# 
+# 
+# $d_{hyp} =$ `r d_hyp[1]` \& $d_{true} =$ `r d_true[2]` 
+# 
+# $M(\frac{d_{emp_2}}{d_{emp_1}})$= `r round(mean(d_emp[1,which(p[1,,1,2] <.05),2,2]/d_emp[1,which(p[1,,1,2] <.05),1,2]),2)`, $SD(\frac{d_{emp_2}}{d_{emp_1}})$= `r round(sd(d_emp[1,which(p[1,,1,2] <.05),2,2]/d_emp[1,which(p[1,,1,2] <.05),1,2]),2)`
+# 
+# $d_{hyp} =$ `r d_hyp[2]` \& $d_{true} =$ `r d_true[2]` 
+# 
+# $M(\frac{d_{emp_2}}{d_{emp_1}})$= `r round(mean(d_emp[2,which(p[2,,1,2] <.05),2,2]/d_emp[2,which(p[2,,1,2] <.05),1,2]),2)`, $SD(\frac{d_{emp_2}}{d_{emp_1}})$= `r round(sd(d_emp[2,which(p[2,,1,2] <.05),2,2]/d_emp[2,which(p[2,,1,2] <.05),1,2]),2)`
+# 
+# 
+# $d_{hyp} =$ `r d_hyp[3]` \& $d_{true} =$ `r d_true[2]` 
+# 
+# $M(\frac{d_{emp_2}}{d_{emp_1}})$= `r round(mean(d_emp[3,which(p[3,,1,2] <.05),2,2]/d_emp[3,which(p[3,,1,2] <.05),1,2]),2)`, $SD(\frac{d_{emp_2}}{d_{emp_1}})$= `r round(sd(d_emp[3,which(p[3,,1,2] <.05),2,2]/d_emp[3,which(p[3,,1,2] <.05),1,2]),2)`
+# 
+# 
+# $d_{hyp} =$ `r d_hyp[4]` \& $d_{true} =$ `r d_true[2]` 
+# 
+# $M(\frac{d_{emp_2}}{d_{emp_1}})$= `r round(mean(d_emp[4,which(p[4,,1,2] <.05),2,2]/d_emp[4,which(p[4,,1,2] <.05),1,2]),2)`, $SD(\frac{d_{emp_2}}{d_{emp_1}})$= `r round(sd(d_emp[4,which(p[4,,1,2] <.05),2,2]/d_emp[4,which(p[4,,1,2] <.05),1,2]),2)`
+# 
+# 
+# 
+# $d_{hyp} =$ `r d_hyp[1]` \& $d_{true} =$ `r d_true[3]` 
+# 
+# $M(\frac{d_{emp_2}}{d_{emp_1}})$= `r round(mean(d_emp[1,which(p[1,,1,3] <.05),2,3]/d_emp[1,which(p[1,,1,3] <.05),1,3]),2)`, $SD(\frac{d_{emp_2}}{d_{emp_1}})$= `r round(sd(d_emp[1,which(p[1,,1,3] <.05),2,3]/d_emp[1,which(p[1,,1,3] <.05),1,3]),2)`
+# 
+# $d_{hyp} =$ `r d_hyp[2]` \& $d_{true} =$ `r d_true[3]` 
+# 
+# $M(\frac{d_{emp_2}}{d_{emp_1}})$= `r round(mean(d_emp[2,which(p[2,,1,3] <.05),2,3]/d_emp[2,which(p[2,,1,3] <.05),1,3]),2)`, $SD(\frac{d_{emp_2}}{d_{emp_1}})$= `r round(sd(d_emp[2,which(p[2,,1,3] <.05),2,3]/d_emp[2,which(p[2,,1,3] <.05),1,3]),2)`
+# 
+# 
+# $d_{hyp} =$ `r d_hyp[3]` \& $d_{true} =$ `r d_true[3]` 
+# 
+# $M(\frac{d_{emp_2}}{d_{emp_1}})$= `r round(mean(d_emp[3,which(p[3,,1,3] <.05),2,3]/d_emp[3,which(p[3,,1,3] <.05),1,3]),2)`, $SD(\frac{d_{emp_2}}{d_{emp_1}})$= `r round(sd(d_emp[3,which(p[3,,1,3] <.05),2,3]/d_emp[3,which(p[3,,1,3] <.05),1,3]),2)`
+# 
+# $d_{hyp} =$ `r d_hyp[4]` \& $d_{true} =$ `r d_true[3]` 
+# 
+# $M(\frac{d_{emp_2}}{d_{emp_1}})$= `r round(mean(d_emp[4,which(p[4,,1,3] <.05),2,3]/d_emp[4,which(p[4,,1,3] <.05),1,3]),2)`, $SD(\frac{d_{emp_2}}{d_{emp_1}})$= `r round(sd(d_emp[4,which(p[4,,1,3] <.05),2,3]/d_emp[4,which(p[4,,1,3] <.05),1,3]),2)`
+# 
+# 
+# $d_{hyp} =$ `r d_hyp[1]` \& $d_{true} =$ `r d_true[4]` 
+# 
+# $M(\frac{d_{emp_2}}{d_{emp_1}})$= `r round(mean(d_emp[1,which(p[1,,1,4] <.05),2,4]/d_emp[1,which(p[1,,1,4] <.05),1,4]),2)`, $SD(\frac{d_{emp_2}}{d_{emp_1}})$= `r round(sd(d_emp[1,which(p[1,,1,4] <.05),2,4]/d_emp[1,which(p[1,,1,4] <.05),1,4]),2)`
+# 
+# $d_{hyp} =$ `r d_hyp[2]` \& $d_{true} =$ `r d_true[4]` 
+# 
+# $M(\frac{d_{emp_2}}{d_{emp_1}})$= `r round(mean(d_emp[2,which(p[2,,1,4] <.05),2,4]/d_emp[2,which(p[2,,1,4] <.05),1,4]),2)`, $SD(\frac{d_{emp_2}}{d_{emp_1}})$= `r round(sd(d_emp[2,which(p[2,,1,4] <.05),2,4]/d_emp[2,which(p[2,,1,4] <.05),1,4]),2)`
+# 
+# 
+# $d_{hyp} =$ `r d_hyp[3]` \& $d_{true} =$ `r d_true[4]` 
+# 
+# $M(\frac{d_{emp_2}}{d_{emp_1}})$= `r round(mean(d_emp[3,which(p[3,,1,4] <.05),2,4]/d_emp[3,which(p[3,,1,4] <.05),1,4]),2)`, $SD(\frac{d_{emp_2}}{d_{emp_1}})$= `r round(sd(d_emp[3,which(p[3,,1,4] <.05),2,4]/d_emp[3,which(p[3,,1,4] <.05),1,4]),2)`
+# 
+# $d_{hyp} =$ `r d_hyp[4]` \& $d_{true} =$ `r d_true[4]` 
+# 
+# $M(\frac{d_{emp_2}}{d_{emp_1}})$= `r round(mean(d_emp[4,which(p[4,,1,4] <.05),2,4]/d_emp[4,which(p[4,,1,4] <.05),1,4]),2)`, $SD(\frac{d_{emp_2}}{d_{emp_1}})$= `r round(sd(d_emp[4,which(p[4,,1,4] <.05),2,4]/d_emp[4,which(p[4,,1,4] <.05),1,4]),2)`
+# Average ratio of effect sizes if $LR > \frac{\beta}{\alpha} =$ 'r beta/alpha' : $\frac{d_{emp_2}}{d_{emp_1}}$:
+#   $d_{hyp} =$ `r d_hyp[1]` \& $d_{true} =$ `r d_true` 
+# `r mean(d_emp[1,which(LR[1,,1] >20),2]/d_emp[1,which(LR[1,,1] >20),1])`
+# $d_{hyp} =$ `r d_hyp[2]` \& $d_{true} =$ `r d_true` 
+# `r mean(d_emp[2,which(LR[1,,1] >20),2]/d_emp[2,which(LR[1,,1] >20),1])`
+# Average ratio of effect sizes if $LR > \frac{\beta}{\alpha} =$ 'r beta/alpha' : $\frac{d_{emp_2}}{d_{emp_1}}$:
+#   $d_{hyp} =$ `r d_hyp[1]` \& $d_{true} =$ `r d_true` 
+# `r mean(d_emp[1,which(LR[1,,1] >20 & Lhyp[1,,1] > 4 ),2]/d_hyp[1])`
+# $d_{hyp} =$ `r d_hyp[2]` \& $d_{true} =$ `r d_true` 
+# `r mean(d_emp[1,which(LR[2,,1] >20 & Lhyp[2,,1] > 4 ),2]/d_hyp[2])`
 
-$d_{hyp} =$ `r d_hyp[1]` \& $d_{true} =$ `r d_true` 
-
-`r mean(d_emp[1,which(LR[1,,1] >20 & Lhyp[1,,1] > 4 ),2]/d_hyp[1])`
-
-
-$d_{hyp} =$ `r d_hyp[2]` \& $d_{true} =$ `r d_true` 
-
-`r mean(d_emp[1,which(LR[2,,1] >20 & Lhyp[2,,1] > 4 ),2]/d_hyp[2])`
-
+``` 
