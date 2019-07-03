@@ -45,7 +45,7 @@ df1 =df2 =matrix(0,nrow = 1, ncol=5)
 
 Simulate `r Nsamples` t-test, twice. The first t-test represents the scientific study and the second t-test can be regarded as the pratical implementation.
 
-```{r }
+```{r , warning=F, message=F}
 
   for (dd in 1:length(d_hyp)){
     for (k in 1:length(d_true)){
@@ -72,26 +72,26 @@ for (times in 1:2){
         #Calculate t-values
         Tval[dd,ss,times, k] = (meanx1-meanx0)/(sqrt((var(x1) + var(x0))/2)*sqrt(2/N[dd]))
         p[dd,ss,times, k] = 2*pt(-Tval[dd,ss,times, k], (2*N[dd]-2)) # p-value
-        d_emp[dd,ss,times, k] = 2*Tval[dd,ss,times, k]/sqrt(N[dd]) #d-emp
+        d_emp[dd,ss,times, k] = 2*Tval[dd,ss,times, k]/sqrt(N[dd]*2) #d-emp
         if(times == 1) df1 = rbind(df1,c(d_emp[dd,ss,times, k],  p[dd,ss,times, k], d_hyp[dd],d_true[k],times))
         if(times == 2) df2 = rbind(df2,c(d_emp[dd,ss,times, k],  p[dd,ss,times, k], d_hyp[dd],d_true[k],times))
         
 ###### the following lines of code are only relevant later for LR test and test on the lower borderof the interval
 #   
-#   #calculate Standard Error as in R t.test function
-        # TvalLow[dd,ss,times, k] = (lowdiff)/(sqrt((var(x1) + var(x0))/2)* sqrt(2/N[dd])) # lower bounds (effect based on lower bound) => IGNORE
-        # d_empLow[dd,ss,times, k] = 2*TvalLow[dd,ss,times, k]/sqrt(N[dd]) # lower bounds => IGNORE
-        # 
-        # L0x[dd,ss,times, k] = dt(Tval[dd,ss,times, k], (2*N[dd]-2), 0) # likelihood of 0 given data, density at observed t-value given df and non centrality param (0)
-        # 
-        # if(!is.na(d_hyp[dd])){
-        # 
-        #   ncp = d_hyp[dd]*sqrt(N[dd])/sqrt(2) #non-centrality param (of t distribution)
-        #   L1x[dd,ss,times, k] = dt(Tval[dd,ss,times, k], (2*N[dd]-2), ncp) #likelihood of obs t-value given hypothesied effect           size for transformed distr given ncp
-        #   Lhypx[dd,ss,times, k] = dt(ncp, (2*N[dd]-2), ncp) #density at median of same distribution (.39)
-        #   LR[dd,ss,times, k] = L1x[dd,ss,times, k]/L0x[dd,ss,times, k] # likelihood ratio (obs t-value and null hyp) (LRT>4 => obs effect size is not from the H0 distr)
-        #   Lhyp[dd,ss,times, k] = Lhypx[dd,ss,times, k]/L1x[dd,ss,times, k] #likelihood ration of the median of hypothesied distr to obs effect size => how far obs effect size from the H0 effect size
-        # }
+  #calculate Standard Error as in R t.test function
+TvalLow[dd,ss,times, k] = (lowdiff)/(sqrt((var(x1) + var(x0))/2)* sqrt(2/N[dd])) # lower bounds (effect based on lower bound) => IGNORE
+d_empLow[dd,ss,times, k] = 2*TvalLow[dd,ss,times, k]/sqrt(N[dd]) # lower bounds => IGNORE
+
+L0x[dd,ss,times, k] = dt(Tval[dd,ss,times, k], (2*N[dd]-2), 0) # likelihood of 0 given data, density at observed t-value given df and non centrality param (0)
+
+if(!is.na(d_hyp[dd])){
+
+  ncp = d_hyp[dd]*sqrt(N[dd])/sqrt(2) #non-centrality param (of t distribution)
+  L1x[dd,ss,times, k] = dt(Tval[dd,ss,times, k], (2*N[dd]-2), ncp) #likelihood of obs t-value given hypothesied effect           size for transformed distr given ncp
+  Lhypx[dd,ss,times, k] = dt(ncp, (2*N[dd]-2), ncp) #density at median of same distribution (.39)
+  LR[dd,ss,times, k] = L1x[dd,ss,times, k]/L0x[dd,ss,times, k] # likelihood ratio (obs t-value and null hyp) (LRT>4 => obs effect size is not from the H0 distr)
+  Lhyp[dd,ss,times, k] = Lhypx[dd,ss,times, k]/L1x[dd,ss,times, k] #likelihood ration of the median of hypothesied distr to obs effect size => how far obs effect size from the H0 effect size
+}
       }
     }
   }
@@ -143,10 +143,9 @@ ggplot(df, aes(x=d_1, y=d_2, color = factor(ratioFactor)))+
   ylab(bquote(d_[obs2]))+
   geom_abline(intercept = 0, slope = 1)+
   scale_color_discrete(name = "", labels = c(bquote(d_[emp_2]/d_[emp_1]<.5),
-                                                                       bquote(d_[emp_2]/d_[emp_1]<1),
-                                                                       bquote(d_[emp_2]/d_[emp_1]<1.5),
- 
-                                                                                                                   bquote(d_[emp_2]/d_[emp_1]>=1.5)))
+                                             bquote(d_[emp_2]/d_[emp_1]<1),
+                                             bquote(d_[emp_2]/d_[emp_1]<1.5),
+                                             bquote(d_[emp_2]/d_[emp_1]>=1.5)))
 ```
 
 
@@ -247,3 +246,42 @@ kable(summaries,col.names = c("M(ratio)",
 # `r mean(d_emp[1,which(LR[2,,1] >20 & Lhyp[2,,1] > 4 ),2]/d_hyp[2])`
 
 ``` 
+
+```{r }
+
+dLR = cbind(c(d_emp[1,,,2],
+  d_emp[1,,,3],
+  d_emp[1,,,4],
+  d_emp[2,,,2],
+  d_emp[2,,,3],
+  d_emp[2,,,4],
+  d_emp[3,,,2],
+  d_emp[3,,,3],
+  d_emp[3,,,4]),
+  
+  log(c(LR[1,,,2],
+  Lhyp[1,,,3],
+  Lhyp[1,,,4],
+  Lhyp[2,,,2],
+  Lhyp[2,,,3],
+  Lhyp[2,,,4],
+  Lhyp[3,,,2],
+  Lhyp[3,,,3],
+  Lhyp[3,,,4])),
+  
+  rep(d_hyp[1:3], each = 3*length(d_emp[1,,,2])),
+  rep(d_true[2:4],3, each = length(d_emp[1,,,2])))
+
+colnames(dLR) = c("d_emp", "L", "d_hyp", "d_true")
+
+dLR = as.data.frame(dLR)
+
+ggplot(dLR, aes(x=d_emp, y=L))+
+  geom_point()+
+  facet_grid(d_hyp~d_true)+
+  xlab(bquote(d_[emp]))+
+  ylab("L")+
+  geom_hline(yintercept = log(4))
+# +
+#   geom_vline(xintercept = d_true)
+```
